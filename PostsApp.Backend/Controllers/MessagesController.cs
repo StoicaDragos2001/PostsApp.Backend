@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using PostsApp.Backend.Models;
+using PostsApp.Backend.ResponseModels;
 using System.Data.SqlClient;
 
 namespace PostsApp.Backend.Controllers
@@ -18,10 +19,10 @@ namespace PostsApp.Backend.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<Message>>> GetMessages()
+        public async Task<ActionResult<List<MessageDTO>>> GetMessages()
         {
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
-            var messages = await connection.QueryAsync<Message>("SELECT * FROM Posts");
+            var messages = await connection.QueryAsync<MessageDTO>("SELECT * FROM Messages");
             return Ok(messages);
         }
     }

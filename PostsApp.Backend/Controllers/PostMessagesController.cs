@@ -16,13 +16,5 @@ namespace PostsApp.Backend.Controllers
         {
             this.config = config;
         }
-
-        [HttpGet]
-        public async Task<ActionResult<List<PostMessage>>> GetMessages()
-        {
-            using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
-            var messages = await connection.QueryAsync<PostMessage>("SELECT * FROM PostMessages");
-            return Ok(messages);
-        }
     }
 }
