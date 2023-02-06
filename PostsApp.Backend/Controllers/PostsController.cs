@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using PostsApp.Backend.Models;
 using PostsApp.Backend.RequestModels;
+using System.Collections;
 using System.Data.SqlClient;
 
 namespace PostsApp.Backend.Controllers
@@ -111,12 +112,16 @@ namespace PostsApp.Backend.Controllers
         }
 
         [HttpPost()]
-        public async Task<ActionResult<List<Post>>> CreatePost([FromBody]PostModelRequest post)
+        public async Task<ActionResult<List<Post>>> CreatePost([FromBody] PostModelRequest post)
         {
-            //var parameters = new { email = "clabat1@paypal.com" };
-            var requestParameters = new { userId = post.UserId, content = post.Content };
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
-            var exists = connection.ExecuteScalar<bool>("SELECT COUNT(1) FROM Users WHERE CAST(Id AS CHAR(256)) = CAST(@userId AS CHAR(256))", requestParameters);
+            Post newPost = new Post
+            {
+                Userid = post.UserId,
+                Content = post.Content
+            };
+            var requestParameters = new { userId = post.UserId, content = post.Content };
+            var exists = await connection.ExecuteScalarAsync<bool>("SELECT COUNT(1) FROM Users WHERE CAST(Id AS CHAR(256)) = CAST(@userId AS CHAR(256))", requestParameters);
             if (exists)
             {
                 //var userId = connection.QueryAsync("SELECT Id FROM Users WHERE Email = @email", parameters);
@@ -124,9 +129,39 @@ namespace PostsApp.Backend.Controllers
                 //return BadRequest();
 
                 await connection.ExecuteAsync("INSERT INTO Posts (Content, UserId) VALUES (@content, @userId)", requestParameters);
-                return Ok(GetPosts());
+                return Created(new Uri("api/posts", UriKind.Relative), newPost);
             }
             return BadRequest();
+        }
+
+        [HttpPut()]
+        public async Task<ActionResult<List<Post>>> UpdatePost([FromBody] PutModelRequest post)
+        {
+            using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
+            Post updatedPost = new Post
+            {
+                Content = post.Content,
+                Id = post.Id
+            };
+            var requestParameters = new { content = post.Content };
+            //var exists = connection.ExecuteScalar<bool>("SELECT COUNT(1) FROM Posts WHERE Id = @Id", requestParameters);
+            await connection.ExecuteAsync("UPDATE Posts SET Content = @Content WHERE Id = @Id", post);
+            //if(exists)
+            return Ok(post);
+            //return Created(new Uri("api/posts", UriKind.Relative), updatedPost);
+        }
+
+        [HttpDelete("{postId}")]
+        public async Task<ActionResult<List<Post>>> DeletePost(Guid postId)
+        {
+            using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
+            await connection.ExecuteAsync("DELETE FROM Posts WHERE Id = @Id", new {Id = postId});
+            return Ok(await SelectAllPosts(connection));
+        }
+
+        private static async Task<IEnumerable<Post>> SelectAllPosts(SqlConnection connection)
+        {
+            return await connection.QueryAsync<Post>("SELECT * FROM Posts");
         }
     }
 }
