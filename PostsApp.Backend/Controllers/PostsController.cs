@@ -81,9 +81,9 @@ namespace PostsApp.Backend.Controllers
             var requestParameters = new { userId = post.UserId, content = post.Content };
             var isUserFound = await connection.QueryAsync<User>("SELECT * FROM Users WHERE Id = @userId", requestParameters);
             if (isUserFound.Count() == 0)
-            {
+                {
                 return BadRequest();
-            }
+                }
             await connection.ExecuteAsync("INSERT INTO Posts (Content, UserId) VALUES (@Content, @UserId)", requestParameters);
             return Created(new Uri("api/posts", UriKind.Relative), post);
         }
@@ -95,7 +95,7 @@ namespace PostsApp.Backend.Controllers
             var requestParameters = new { content = post.Content, id = post.Id };
             var isPostFound = await connection.QueryAsync<User>("SELECT * FROM Posts WHERE Id = @id", requestParameters);
             if (isPostFound.Count() == 0)
-            {
+                {
                 return BadRequest();
             }
             await connection.ExecuteAsync("UPDATE Posts SET Content = @Content WHERE Id = @Id", post);
@@ -105,6 +105,8 @@ namespace PostsApp.Backend.Controllers
         [HttpDelete()]
         public async Task<ActionResult<Post>> DeletePost([FromBody] Guid postId)
         {
+            //var parameters = new { email = "clabat1@paypal.com" };
+            var requestParameters = new { userId = post.UserId, content = post.Content };
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
             var isPostFound = await connection.QueryAsync<User>("SELECT * FROM Posts WHERE Id = @id", new { id = postId });
             if (isPostFound.Count() == 0)
