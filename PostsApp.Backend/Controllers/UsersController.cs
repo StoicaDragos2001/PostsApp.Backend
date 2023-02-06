@@ -81,7 +81,7 @@ namespace PostsApp.Backend.Controllers
                 var queryResult = connection.Query<PostWithUserInfoDTO, UserDTO, PostWithUserInfoDTO>(
                 sqlQuery,
                 (post, user) =>
-                {
+            {
                     post.User = user;
                     return post;
                 },
@@ -91,5 +91,6 @@ namespace PostsApp.Backend.Controllers
             }
             return BadRequest();
         }
+
     }
 }
