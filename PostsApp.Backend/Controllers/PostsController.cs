@@ -1,10 +1,13 @@
-﻿using Dapper;
+﻿using AutoMapper;
+using Dapper;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using PostsApp.Backend.Models;
 using PostsApp.Backend.RequestModels;
+using PostsApp.Backend.ResponseModels;
 using System.Collections;
 using System.Data.SqlClient;
+using System.Net;
 
 namespace PostsApp.Backend.Controllers
 {
@@ -13,125 +16,103 @@ namespace PostsApp.Backend.Controllers
     public class PostsController : ControllerBase
     {
         private readonly IConfiguration config;
+        private readonly IMapper mapper;
 
         public PostsController(IConfiguration config)
         {
             this.config = config;
+
+            var mapperConfig = new MapperConfiguration(cfg => {
+                cfg.CreateMap<Post, PostDTO>();
+            });
+            this.mapper = mapperConfig.CreateMapper();
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<Post>>> GetPosts()
+        public async Task<ActionResult<List<PostDTO>>> GetPosts()
         {
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
-            var posts = await connection.QueryAsync<Post>("SELECT * FROM Posts");
+            var posts = await connection.QueryAsync<PostDTO>("SELECT * FROM Posts");
             return Ok(posts);
         }
 
         [HttpGet("noMessages")]
-        public async Task<ActionResult<List<Post>>> GetPostsWithoutMessages()
+        public async Task<ActionResult<List<PostDTO>>> GetPostsWithoutMessages()
         {
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
             var sqlQuery = @"SELECT *
-                            FROM Posts
-                            LEFT OUTER JOIN PostMessages ON PostMessages.PostId = Posts.Id
-                            WHERE PostMessages.MessageId IS NULL";
-            var queryResult = connection.Query<PostMessage, Post, PostMessage>(
+                            FROM Posts p
+                            LEFT OUTER JOIN PostMessages pm ON pm.PostId = p.Id
+                            WHERE pm.MessageId IS NULL";
+            var queryResult = connection.Query<Post, PostMessage, Post>(
                 sqlQuery,
-                (postMessage, post) =>
+                (post, postMessage) =>
                 {
-                    postMessage.Post = post;
-                    return postMessage;
+                    //postMessage.Post = post;
+                    return post;
                 }
                 );
-            return Ok(queryResult);
+            return Ok(mapper.Map<List<PostDTO>>(queryResult));
         }
 
         [HttpGet("messages")]
-        public async Task<ActionResult<List<Post>>> GetPostsWithMessages()
+        public async Task<ActionResult<List<PostDTO>>> GetPostsWithMessages()
         {
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
             var sqlQuery = @"SELECT *
-                            FROM Posts
-                            LEFT OUTER JOIN PostMessages ON PostMessages.PostId = Posts.Id
-                            WHERE PostMessages.MessageId IS NOT NULL";
-            var queryResult = connection.Query<PostMessage, Post, PostMessage>(
+                            FROM Posts p
+                            JOIN PostMessages pm ON pm.PostId = p.Id
+                            WHERE pm.MessageId IS NOT NULL";
+            var queryResult = connection.Query<Post, PostMessage, Post>(
                 sqlQuery,
-                (postMessage, post) =>
+                (post, postMessage) =>
                 {
                     postMessage.Post = post;
-                    return postMessage;
-                }
-                );
-            return Ok(queryResult);
-        }
-
-        [HttpGet("users")]
-        public async Task<ActionResult<List<Post>>> GetUsers()
-        {
-            using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
-            var sqlQuery = @"SELECT *
-                           FROM Posts p
-                           JOIN Users u ON p.UserId = u.Id
-                           ORDER BY p.CreatedDate ASC";
-            var queryResult = connection.Query<Post, User, Post>(
-                sqlQuery,
-                (post, user) =>
-                {
-                    post.User = user;
                     return post;
                 }
                 );
-            return Ok(queryResult);
-        }
-
-        [HttpGet("users/{email}")]
-        public async Task<ActionResult<List<Post>>> GetUserPosts(string email)
-        {
-            using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
-            var parameters = new { email = email };
-            var exists = connection.ExecuteScalar<bool>("SELECT COUNT(1) FROM Users WHERE Email = @email", parameters);
-            var sqlQuery = @"SELECT *
-                           FROM Posts p
-                           JOIN Users u ON p.UserId = u.Id
-                           WHERE u.Email = @email
-                           ORDER BY p.CreatedDate ASC";
-            if (exists)
-            {
-                var queryResult = connection.Query<Post, User, Post>(
-                sqlQuery,
-                (post, user) =>
-                {
-                    post.User = user;
-                    return post;
-                },
-                parameters
-                );
-                return Ok(queryResult);
-            }
-            return BadRequest();
+            return Ok(mapper.Map<List<PostDTO>>(queryResult).DistinctBy(post => post.Content));
         }
 
         [HttpPost()]
-        public async Task<ActionResult<List<Post>>> CreatePost([FromBody] PostModelRequest post)
+        public async Task<ActionResult<PostDTO>> CreatePost([FromBody] PostModelRequest post)
         {
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
-            Post newPost = new Post
-            {
-                Userid = post.UserId,
-                Content = post.Content
-            };
             var requestParameters = new { userId = post.UserId, content = post.Content };
-            var exists = await connection.ExecuteScalarAsync<bool>("SELECT COUNT(1) FROM Users WHERE CAST(Id AS CHAR(256)) = CAST(@userId AS CHAR(256))", requestParameters);
-            if (exists)
+            var isUserFound = await connection.QueryAsync<User>("SELECT * FROM Users WHERE Id = @userId", requestParameters);
+            if (isUserFound.Count() == 0)
             {
-                //var userId = connection.QueryAsync("SELECT Id FROM Users WHERE Email = @email", parameters);
-                //var requestParameters = new { userId = post.UserId, content = post.Content };
-                //return BadRequest();
-
-                await connection.ExecuteAsync("INSERT INTO Posts (Content, UserId) VALUES (@content, @userId)", requestParameters);
-                return Created(new Uri("api/posts", UriKind.Relative), newPost);
+                return BadRequest();
             }
-            return BadRequest();
+            await connection.ExecuteAsync("INSERT INTO Posts (Content, UserId) VALUES (@Content, @UserId)", requestParameters);
+            return Created(new Uri("api/posts", UriKind.Relative), post);
+        }
+
+        [HttpPut()]
+        public async Task<ActionResult<Post>> UpdatePost([FromBody] PutModelRequest post)
+        {
+            using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
+            var requestParameters = new { content = post.Content, id = post.Id };
+            var isPostFound = await connection.QueryAsync<User>("SELECT * FROM Posts WHERE Id = @id", requestParameters);
+            if (isPostFound.Count() == 0)
+            {
+                return BadRequest();
+            }
+            await connection.ExecuteAsync("UPDATE Posts SET Content = @Content WHERE Id = @Id", post);
+            return Ok(post);
+        }
+
+        [HttpDelete()]
+        public async Task<ActionResult<Post>> DeletePost([FromBody] Guid postId)
+        {
+            using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
+            var isPostFound = await connection.QueryAsync<User>("SELECT * FROM Posts WHERE Id = @id", new { id = postId });
+            if (isPostFound.Count() == 0)
+            {
+                return BadRequest();
+            }
+            await connection.ExecuteAsync("DELETE FROM Posts WHERE Id = @Id", new { Id = postId });
+            return new NoContentResult();
         }
 
         [HttpPut()]
