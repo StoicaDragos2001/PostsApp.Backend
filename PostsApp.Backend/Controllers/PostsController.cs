@@ -106,7 +106,7 @@ namespace PostsApp.Backend.Controllers
         public async Task<ActionResult<Post>> DeletePost([FromBody] Guid postId)
         {
             //var parameters = new { email = "clabat1@paypal.com" };
-            var requestParameters = new { userId = post.UserId, content = post.Content };
+            //var requestParameters = new { userId = post.UserId, content = post.Content };
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
             var isPostFound = await connection.QueryAsync<User>("SELECT * FROM Posts WHERE Id = @id", new { id = postId });
             if (isPostFound.Count() == 0)
