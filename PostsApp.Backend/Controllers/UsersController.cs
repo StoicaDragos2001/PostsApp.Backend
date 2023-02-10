@@ -37,9 +37,7 @@ namespace PostsApp.Backend.Controllers
         {
             using var connection = new SqlConnection(this.config.GetConnectionString("DefaultConnection"));
             var parameters = new { email = email };
-            // var isUserFound = connection.Query("SELECT * FROM Users WHERE Email = @email", parameters).FirstOrDefault();
             var isUserFound = connection.QueryFirstOrDefault<UserDTO>("SELECT * FROM Users WHERE Email = @email", parameters);
-            //var isUserFound = connection.ExecuteScalar<bool>("SELECT COUNT(1) FROM Users WHERE Email = @email", parameters);
             var sqlQuery = "SELECT * FROM Users WHERE Email = @email";
             if (isUserFound == null)
                 return BadRequest();  
